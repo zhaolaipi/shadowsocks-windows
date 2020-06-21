@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Drawing;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -6,6 +7,7 @@ using System.Windows.Forms;
 using System.Windows.Forms.DataVisualization.Charting;
 using Shadowsocks.Controller;
 using Shadowsocks.Model;
+using Shadowsocks.Properties;
 
 namespace Shadowsocks.View
 {
@@ -23,16 +25,27 @@ namespace Shadowsocks.View
         {
             if (controller == null) return;
             InitializeComponent();
+            Icon = Icon.FromHandle(Resources.ssw128.GetHicon());
             _speedSeries = StatisticsChart.Series["Speed"];
             _packageLossSeries = StatisticsChart.Series["Package Loss"];
             _pingSeries = StatisticsChart.Series["Ping"];
             _controller = controller;
             _controller.ConfigChanged += (sender, args) => LoadConfiguration();
+            UpdateTexts();
             LoadConfiguration();
             Load += (sender, args) => InitData();
-
         }
 
+        private void UpdateTexts()
+        {
+            I18N.TranslateForm(this);
+
+            foreach (var item in StatisticsChart.Series)
+            {
+                item.Name = I18N.GetString(item.Name);
+            }
+
+        }
         private void LoadConfiguration()
         {
             var configs = _controller.GetCurrentConfiguration().configs;
@@ -50,20 +63,20 @@ namespace Shadowsocks.View
             bindingConfiguration.Add(_configuration);
             foreach (var kv in _configuration.Calculations)
             {
-                var calculation = new CalculationControl(kv.Key, kv.Value);
+                var calculation = new CalculationControl(I18N.GetString(kv.Key), kv.Value);
                 calculationContainer.Controls.Add(calculation);
             }
 
             serverSelector.DataSource = _servers;
 
             _dataTable.Columns.Add("Timestamp", typeof(DateTime));
-            _dataTable.Columns.Add("Speed", typeof (int));
+            _dataTable.Columns.Add("Speed", typeof(int));
             _speedSeries.XValueMember = "Timestamp";
             _speedSeries.YValueMembers = "Speed";
 
             // might be empty
-            _dataTable.Columns.Add("Package Loss", typeof (int));
-            _dataTable.Columns.Add("Ping", typeof (int));
+            _dataTable.Columns.Add("Package Loss", typeof(int));
+            _dataTable.Columns.Add("Ping", typeof(int));
             _packageLossSeries.XValueMember = "Timestamp";
             _packageLossSeries.YValueMembers = "Package Loss";
             _pingSeries.XValueMember = "Timestamp";
@@ -124,8 +137,8 @@ namespace Shadowsocks.View
                             {
                                 dataGroup.First().Timestamp,
                                 Speed = dataGroup.Max(data => data.MaxInboundSpeed) ?? 0,
-                                Ping = (int) (dataGroup.Average(data => data.AverageResponse) ?? 0),
-                                PackageLossPercentage = (int) (dataGroup.Average(data => data.PackageLoss) ?? 0) * 100
+                                Ping = (int)(dataGroup.Average(data => data.AverageResponse) ?? 0),
+                                PackageLossPercentage = (int)(dataGroup.Average(data => data.PackageLoss) ?? 0) * 100
                             };
             foreach (var data in finalData.Where(data => data.Speed != 0 || data.PackageLossPercentage != 0 || data.Ping != 0))
             {

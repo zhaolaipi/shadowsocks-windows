@@ -11,6 +11,9 @@ namespace Shadowsocks.Model
     [Serializable]
     public class Server
     {
+        public const string DefaultMethod = "chacha20-ietf-poly1305";
+        public const int DefaultPort = 8388;
+
         #region ParseLegacyURL
         public static readonly Regex
             UrlFinder = new Regex(@"ss://(?<base64>[A-Za-z0-9+-/=_]+)(?:#(?<tag>\S+))?", RegexOptions.IgnoreCase),
@@ -26,6 +29,7 @@ namespace Shadowsocks.Model
         public string method;
         public string plugin;
         public string plugin_opts;
+        public string plugin_args;
         public string remarks;
         public int timeout;
 
@@ -46,32 +50,33 @@ namespace Shadowsocks.Model
             {
                 return I18N.GetString("New server");
             }
-            string serverStr;
-            // CheckHostName() won't do a real DNS lookup
-            var hostType = Uri.CheckHostName(server);
 
-            switch (hostType)
-            {
-                case UriHostNameType.IPv6:
-                    serverStr = $"[{server}]:{server_port}";
-                    break;
-                default:
-                    // IPv4 and domain name
-                    serverStr = $"{server}:{server_port}";
-                    break;
-            }
+            string serverStr = $"{FormatHostName(server)}:{server_port}";
             return remarks.IsNullOrEmpty()
                 ? serverStr
                 : $"{remarks} ({serverStr})";
         }
 
+        public string FormatHostName(string hostName)
+        {
+            // CheckHostName() won't do a real DNS lookup
+            switch (Uri.CheckHostName(hostName))
+            {
+                case UriHostNameType.IPv6:  // Add square bracket when IPv6 (RFC3986)
+                    return $"[{hostName}]";
+                default:    // IPv4 or domain name
+                    return hostName;
+            }
+        }
+
         public Server()
         {
             server = "";
-            server_port = 8388;
-            method = "aes-256-cfb";
+            server_port = DefaultPort;
+            method = DefaultMethod;
             plugin = "";
             plugin_opts = "";
+            plugin_args = "";
             password = "";
             remarks = "";
             timeout = DefaultServerTimeoutSec;
@@ -111,7 +116,7 @@ namespace Shadowsocks.Model
 
         public static List<Server> GetServers(string ssURL)
         {
-            var serverUrls = ssURL.Split('\r', '\n');
+            var serverUrls = ssURL.Split('\r', '\n', ' ');
 
             List<Server> servers = new List<Server>();
             foreach (string serverUrl in serverUrls)
@@ -141,7 +146,7 @@ namespace Shadowsocks.Model
                     Server server = new Server
                     {
                         remarks = parsedUrl.GetComponents(UriComponents.Fragment, UriFormat.Unescaped),
-                        server = parsedUrl.GetComponents(UriComponents.Host, UriFormat.Unescaped),
+                        server = parsedUrl.IdnHost,
                         server_port = parsedUrl.Port,
                     };
 
@@ -167,7 +172,7 @@ namespace Shadowsocks.Model
                     server.password = userInfoParts[1];
 
                     NameValueCollection queryParameters = HttpUtility.ParseQueryString(parsedUrl.Query);
-                    string[] pluginParts = HttpUtility.UrlDecode(queryParameters["plugin"] ?? "").Split(new[] { ';' }, 2);
+                    string[] pluginParts = (queryParameters["plugin"] ?? "").Split(new[] { ';' }, 2);
                     if (pluginParts.Length > 0)
                     {
                         server.plugin = pluginParts[0] ?? "";

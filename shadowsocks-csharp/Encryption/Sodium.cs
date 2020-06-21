@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using NLog;
 using Shadowsocks.Controller;
 using Shadowsocks.Properties;
 using Shadowsocks.Util;
@@ -9,6 +10,8 @@ namespace Shadowsocks.Encryption
 {
     public static class Sodium
     {
+        private static Logger logger = LogManager.GetCurrentClassLogger();
+
         private const string DLLNAME = "libsscrypto.dll";
 
         private static bool _initialized = false;
@@ -28,7 +31,7 @@ namespace Shadowsocks.Encryption
             }
             catch (System.Exception e)
             {
-                Logging.LogUsefulException(e);
+                logger.LogUsefulException(e);
             }
             LoadLibrary(dllPath);
 
@@ -46,7 +49,7 @@ namespace Shadowsocks.Encryption
                     }
 
                     AES256GCMAvailable = crypto_aead_aes256gcm_is_available() == 1;
-                    Logging.Debug($"sodium: AES256GCMAvailable is {AES256GCMAvailable}");
+                    logger.Debug($"sodium: AES256GCMAvailable is {AES256GCMAvailable}");
                 }
             }
         }
@@ -72,6 +75,14 @@ namespace Shadowsocks.Encryption
         [DllImport(DLLNAME, CallingConvention = CallingConvention.Cdecl)]
         public static extern int crypto_aead_chacha20poly1305_ietf_decrypt(byte[] m, ref ulong mlen_p,
             byte[] nsec, byte[] c, ulong clen, byte[] ad, ulong adlen, byte[] npub, byte[] k);
+
+        [DllImport(DLLNAME, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int crypto_aead_xchacha20poly1305_ietf_encrypt(byte[] c, ref ulong clen_p, byte[] m, ulong mlen,
+            byte[] ad, ulong adlen, byte[] nsec, byte[] npub, byte[] k);
+
+        [DllImport(DLLNAME, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int crypto_aead_xchacha20poly1305_ietf_decrypt(byte[] m, ref ulong mlen_p, byte[] nsec, byte[] c,
+            ulong clen, byte[] ad, ulong adlen, byte[] npub, byte[] k);
 
         [DllImport(DLLNAME, CallingConvention = CallingConvention.Cdecl)]
         public static extern int crypto_aead_aes256gcm_encrypt(byte[] c, ref ulong clen_p, byte[] m, ulong mlen,

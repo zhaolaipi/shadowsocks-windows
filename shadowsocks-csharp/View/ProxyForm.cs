@@ -12,7 +12,7 @@ namespace Shadowsocks.View
         private ShadowsocksController controller;
 
         // this is a copy of configuration that we are working on
-        private ProxyConfig _modifiedConfiguration;
+        private ProxyConfig _modifiedProxyConfig;
 
         public ProxyForm(ShadowsocksController controller)
         {
@@ -31,15 +31,7 @@ namespace Shadowsocks.View
 
         private void UpdateTexts()
         {
-            UseProxyCheckBox.Text = I18N.GetString("Use Proxy");
-            ProxyTypeLabel.Text = I18N.GetString("Proxy Type");
-            ProxyAddrLabel.Text = I18N.GetString("Proxy Addr");
-            ProxyPortLabel.Text = I18N.GetString("Proxy Port");
-            ProxyTimeoutLabel.Text = I18N.GetString("Timeout(Sec)");
-            ProxyNotificationLabel.Text = I18N.GetString("If server has a plugin, proxy will not be used");
-            OKButton.Text = I18N.GetString("OK");
-            MyCancelButton.Text = I18N.GetString("Cancel");
-            this.Text = I18N.GetString("Edit Proxy");
+            I18N.TranslateForm(this);
         }
 
         private void controller_ConfigChanged(object sender, EventArgs e)
@@ -49,53 +41,57 @@ namespace Shadowsocks.View
 
         private void LoadCurrentConfiguration()
         {
-            _modifiedConfiguration = controller.GetConfigurationCopy().proxy;
-            UseProxyCheckBox.Checked = _modifiedConfiguration.useProxy;
-            ProxyServerTextBox.Text = _modifiedConfiguration.proxyServer;
-            ProxyPortTextBox.Text = _modifiedConfiguration.proxyPort.ToString();
-            ProxyTimeoutTextBox.Text = _modifiedConfiguration.proxyTimeout.ToString();
-            ProxyTypeComboBox.SelectedIndex = _modifiedConfiguration.proxyType;
+            _modifiedProxyConfig = controller.GetConfigurationCopy().proxy;
+            UseProxyCheckBox.Checked = _modifiedProxyConfig.useProxy;
+            ProxyServerTextBox.Text = _modifiedProxyConfig.proxyServer;
+            ProxyPortTextBox.Text = _modifiedProxyConfig.proxyPort.ToString();
+            ProxyTimeoutTextBox.Text = _modifiedProxyConfig.proxyTimeout.ToString();
+            ProxyTypeComboBox.SelectedIndex = _modifiedProxyConfig.proxyType;
+            UseAuthCheckBox.Checked = _modifiedProxyConfig.useAuth;
+            AuthUserTextBox.Text = _modifiedProxyConfig.authUser;
+            AuthPwdTextBox.Text = _modifiedProxyConfig.authPwd;
         }
 
         private void OKButton_Click(object sender, EventArgs e)
         {
-
-            if (UseProxyCheckBox.Checked)
+            _modifiedProxyConfig.useProxy = UseProxyCheckBox.Checked;
+            if (_modifiedProxyConfig.useProxy)
             {
-                int port;
-                int timeout;
-                if (!int.TryParse(ProxyPortTextBox.Text, out port))
+                if (!int.TryParse(ProxyPortTextBox.Text, out _modifiedProxyConfig.proxyPort))
                 {
                     MessageBox.Show(I18N.GetString("Illegal port number format"));
                     return;
                 }
 
-                if (!int.TryParse(ProxyTimeoutTextBox.Text, out timeout))
+                if (!int.TryParse(ProxyTimeoutTextBox.Text, out _modifiedProxyConfig.proxyTimeout))
                 {
                     MessageBox.Show(I18N.GetString("Illegal timeout format"));
                     return;
                 }
 
-                var type = ProxyTypeComboBox.SelectedIndex;
-                var proxy = ProxyServerTextBox.Text;
+                _modifiedProxyConfig.proxyType = ProxyTypeComboBox.SelectedIndex;
+
                 try
                 {
-                    Configuration.CheckServer(proxy);
-                    Configuration.CheckPort(port);
-                    Configuration.CheckTimeout(timeout, ProxyConfig.MaxProxyTimeoutSec);
+                    Configuration.CheckServer(_modifiedProxyConfig.proxyServer = ProxyServerTextBox.Text);
+                    Configuration.CheckPort(_modifiedProxyConfig.proxyPort);
+                    Configuration.CheckTimeout(_modifiedProxyConfig.proxyTimeout, ProxyConfig.MaxProxyTimeoutSec);
+
+                    _modifiedProxyConfig.useAuth = UseAuthCheckBox.Checked;
+                    if (_modifiedProxyConfig.useAuth)
+                    {
+                        Configuration.CheckProxyAuthUser(_modifiedProxyConfig.authUser = AuthUserTextBox.Text);
+                        Configuration.CheckProxyAuthPwd(_modifiedProxyConfig.authPwd = AuthPwdTextBox.Text);
+                    }
                 }
                 catch (Exception ex)
                 {
                     MessageBox.Show(ex.Message);
                     return;
                 }
+            }
 
-                controller.EnableProxy(type, proxy, port, timeout);
-            }
-            else
-            {
-                controller.DisableProxy();
-            }
+            controller.SaveProxy(_modifiedProxyConfig);
 
             this.Close();
         }
@@ -119,18 +115,62 @@ namespace Shadowsocks.View
         {
             if (UseProxyCheckBox.Checked)
             {
-                ProxyServerTextBox.Enabled = true;
-                ProxyPortTextBox.Enabled = true;
-                ProxyTimeoutTextBox.Enabled = true;
+                ProxyServerTextBox.Enabled =
+                ProxyPortTextBox.Enabled =
+                ProxyTimeoutTextBox.Enabled =
                 ProxyTypeComboBox.Enabled = true;
+
+                if (ProxyTypeComboBox.SelectedIndex == ProxyConfig.PROXY_HTTP)
+                {
+                    UseAuthCheckBox.Enabled = true;
+
+                    if (UseAuthCheckBox.Checked)
+                    {
+                        AuthUserTextBox.Enabled =
+                        AuthPwdTextBox.Enabled = true;
+                    }
+                    else
+                    {
+                        AuthUserTextBox.Enabled =
+                        AuthPwdTextBox.Enabled = false;
+                    }
+                }
+                else
+                {
+                    // TODO support for SOCK5 auth
+                    UseAuthCheckBox.Enabled =
+                    AuthUserTextBox.Enabled =
+                    AuthPwdTextBox.Enabled = false;
+                }
             }
             else
             {
-                ProxyServerTextBox.Enabled = false;
-                ProxyPortTextBox.Enabled = false;
-                ProxyTimeoutTextBox.Enabled = false;
-                ProxyTypeComboBox.Enabled = false;
+                ProxyServerTextBox.Enabled =
+                ProxyPortTextBox.Enabled =
+                ProxyTimeoutTextBox.Enabled =
+                ProxyTypeComboBox.Enabled =
+                UseAuthCheckBox.Enabled =
+                AuthUserTextBox.Enabled =
+                AuthPwdTextBox.Enabled = false;
             }
+        }
+
+        private void ProxyTypeComboBox_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            // TODO support for SOCK5 auth
+            if (ProxyTypeComboBox.SelectedIndex != ProxyConfig.PROXY_HTTP)
+            {
+                UseAuthCheckBox.Checked = false;
+                AuthUserTextBox.Clear();
+                AuthPwdTextBox.Clear();
+            }
+
+            UpdateEnabled();
+        }
+
+        private void UseAuthCheckBox_CheckedChanged(object sender, EventArgs e)
+        {
+            UpdateEnabled();
         }
     }
 }

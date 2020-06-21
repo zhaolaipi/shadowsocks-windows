@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using NLog;
 using Shadowsocks.Controller;
 using Shadowsocks.Properties;
 using Shadowsocks.Util;
@@ -9,6 +10,8 @@ namespace Shadowsocks.Encryption
 {
     public static class MbedTLS
     {
+        private static Logger logger = LogManager.GetCurrentClassLogger();
+
         private const string DLLNAME = "libsscrypto.dll";
 
         public const int MBEDTLS_ENCRYPT = 1;
@@ -26,7 +29,7 @@ namespace Shadowsocks.Encryption
             }
             catch (System.Exception e)
             {
-                Logging.LogUsefulException(e);
+                logger.LogUsefulException(e);
             }
             LoadLibrary(dllPath);
         }
@@ -34,7 +37,8 @@ namespace Shadowsocks.Encryption
         public static byte[] MD5(byte[] input)
         {
             byte[] output = new byte[16];
-            md5(input, (uint) input.Length, output);
+            if (md5_ret(input, (uint) input.Length, output) != 0)
+                throw new System.Exception("mbedtls: MD5 failure");
             return output;
         }
 
@@ -42,7 +46,7 @@ namespace Shadowsocks.Encryption
         private static extern IntPtr LoadLibrary(string path);
 
         [DllImport(DLLNAME, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void md5(byte[] input, uint ilen, byte[] output);
+        public static extern int md5_ret(byte[] input, uint ilen, byte[] output);
 
         /// <summary>
         /// Get cipher ctx size for unmanaged memory allocation
